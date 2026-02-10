@@ -35,4 +35,4 @@ testpaths = ["tests"]
 addopts = "-q"
 
 [tool.setuptools.package-data]
-windows_agent = ["static/*.html", "static/*.js"]
+windows_agent = ["static/*.html", "static/*.js", "static/*.css"]

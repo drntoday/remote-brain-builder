@@ -4,41 +4,33 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Remote Brain Controller</title>
-    <style>
-      body { font-family: sans-serif; margin: 1rem; max-width: 520px; }
-      input, button { font-size: 1rem; padding: .5rem; width: 100%; margin: .25rem 0; }
-      .row { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
-      #touchpad { border: 1px solid #999; border-radius: 8px; height: 180px; touch-action: none; margin-top: .5rem; }
-      #log { font-size: .9rem; color: #333; min-height: 1.2em; }
-    </style>
+    <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <h2>Remote Brain</h2>
-    <div id="log">Disconnected</div>
+    <main class="container">
+      <h1>Remote Brain</h1>
+      <p id="status" class="status disconnected">Disconnected</p>
 
-    <label for="wsUrl">WebSocket URL</label>
-    <input id="wsUrl" placeholder="ws://192.168.1.20:8765" />
-    <button id="connectBtn">Connect</button>
+      <section>
+        <h2>Pairing</h2>
+        <div class="row">
+          <input id="pairCode" maxlength="6" inputmode="numeric" pattern="\d{6}" placeholder="6-digit code" />
+          <button id="pairBtn">Pair</button>
+        </div>
+      </section>
 
-    <label for="pairCode">Pairing code (6 digits)</label>
-    <input id="pairCode" maxlength="6" inputmode="numeric" pattern="\d{6}" placeholder="123456" />
-    <button id="pairBtn">Pair</button>
+      <section>
+        <h2>Touchpad</h2>
+        <div id="touchpad" aria-label="Touchpad">Use one finger to move, tap to click, two fingers to scroll.</div>
+      </section>
 
-    <div id="touchpad">Touchpad: drag to move mouse</div>
+      <section>
+        <h2>Keyboard</h2>
+        <input id="keyboardInput" autocomplete="off" placeholder="Type here" />
+      </section>
 
-    <div class="row">
-      <button data-click="left">Left Click</button>
-      <button data-click="right">Right Click</button>
-    </div>
-
-    <div class="row">
-      <button id="scrollUp">Scroll Up</button>
-      <button id="scrollDown">Scroll Down</button>
-    </div>
-
-    <label for="keyInput">Key</label>
-    <input id="keyInput" placeholder="enter / a / escape" />
-    <button id="sendKey">Send Keypress</button>
+      <button id="reconnectBtn" class="secondary">Reconnect</button>
+    </main>
 
     <script src="/app.js"></script>
   </body>

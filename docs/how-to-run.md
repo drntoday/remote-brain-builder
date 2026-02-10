@@ -18,19 +18,26 @@ python -m pip install -e .
 ```
 
 ## 4) Run the agent
-Default server port is **8765**.
+Default WebSocket server port is **8765**.
+Default phone web UI port is **8766**.
 ```powershell
 python -m windows_agent
 ```
 
 A pairing code window should appear. Keep the app running.
 
-## 5) Pair your device
-1. In your controller app, send `pair.request`.
-2. Confirm with `pair.confirm` using the 6-digit code shown.
+## 5) Open the phone web UI
+1. Make sure your phone is on the same local network as the PC.
+2. Open your phone browser to:
+   - `http://<pc-ip>:8766`
+3. The page auto-connects to `ws://<pc-ip>:8765`.
+
+## 6) Pair your device
+1. Enter the 6-digit code shown in the Windows pairing window.
+2. Tap **Pair** (this sends `pair.request` then `pair.confirm`).
 3. If valid, the agent responds with `pair.result` success and trusts your `device_id`.
 
-## 6) Optional configuration
+## 7) Optional configuration
 You can override settings with CLI args or env vars:
 - `--port` or `WINDOWS_AGENT_PORT`
 - `--host` or `WINDOWS_AGENT_HOST`
@@ -38,12 +45,15 @@ You can override settings with CLI args or env vars:
 - `--audit-log` or `WINDOWS_AGENT_AUDIT_LOG`
 - `--rate-limit-per-sec` or `WINDOWS_AGENT_RATE_LIMIT`
 - `--no-pairing-window` to disable the tkinter window (headless/testing)
+- `--no-web-ui` to disable static phone UI hosting
+- `--web-ui-host` or `WINDOWS_AGENT_WEB_UI_HOST`
+- `--web-ui-port` or `WINDOWS_AGENT_WEB_UI_PORT`
 
 Example:
 ```powershell
-python -m windows_agent --port 9000 --trusted-registry .\trusted_devices.json
+python -m windows_agent --port 9000 --web-ui-port 9001 --trusted-registry .\trusted_devices.json
 ```
 
-## 7) Files created by the agent
+## 8) Files created by the agent
 - `trusted_devices.json` — trusted paired devices.
 - `audit.log` — timestamped actions (`device_id` + action).

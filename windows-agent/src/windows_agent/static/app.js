@@ -1,29 +1,37 @@
-const logEl = document.getElementById("log");
-const wsUrlInput = document.getElementById("wsUrl");
+const statusEl = document.getElementById("status");
 const pairCodeInput = document.getElementById("pairCode");
-const keyInput = document.getElementById("keyInput");
+const pairBtn = document.getElementById("pairBtn");
+const keyboardInput = document.getElementById("keyboardInput");
+const reconnectBtn = document.getElementById("reconnectBtn");
 const touchpad = document.getElementById("touchpad");
 
-const savedWsUrl = localStorage.getItem("ws_url");
-wsUrlInput.value = savedWsUrl || `ws://${location.hostname}:8765`;
-
+const wsUrl = `ws://${window.location.hostname}:8765`;
 const deviceId = localStorage.getItem("device_id") || crypto.randomUUID();
 localStorage.setItem("device_id", deviceId);
 
-let ws = null;
-let lastTouch = null;
+let ws;
+let lastSingleTouch = null;
+let lastTwoFingerCenter = null;
+let pendingTap = false;
 
-function setLog(text) {
-  logEl.textContent = text;
+function nonce() {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-function message(type, payload) {
+function setStatus(text, className) {
+  statusEl.textContent = text;
+  statusEl.className = `status ${className}`;
+}
+
+function envelope(type, payload) {
   return {
     protocol_version: "1.0",
     type,
     id: crypto.randomUUID(),
     ts: Date.now(),
-    nonce: Math.random().toString(16).slice(2) + Math.random().toString(16).slice(2),
+    nonce: nonce(),
     device_id: deviceId,
     payload,
   };
@@ -31,87 +39,136 @@ function message(type, payload) {
 
 function send(type, payload) {
   if (!ws || ws.readyState !== WebSocket.OPEN) {
-    setLog("WebSocket not connected");
     return;
   }
-  ws.send(JSON.stringify(message(type, payload)));
+  ws.send(JSON.stringify(envelope(type, payload)));
 }
 
-document.getElementById("connectBtn").addEventListener("click", () => {
-  const url = wsUrlInput.value.trim();
-  localStorage.setItem("ws_url", url);
-  ws = new WebSocket(url);
+function sendClick(button = "left") {
+  send("input.mouse_click", { button, action: "down" });
+  send("input.mouse_click", { button, action: "up" });
+}
 
-  ws.onopen = () => setLog(`Connected as ${deviceId}`);
-  ws.onclose = () => setLog("Disconnected");
-  ws.onerror = () => setLog("WebSocket error");
+function connect() {
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+    return;
+  }
+
+  setStatus(`Connecting to ${wsUrl}...`, "connecting");
+  ws = new WebSocket(wsUrl);
+
+  ws.onopen = () => setStatus(`Connected (${deviceId})`, "connected");
+  ws.onclose = () => setStatus("Disconnected", "disconnected");
+  ws.onerror = () => setStatus("WebSocket error", "disconnected");
   ws.onmessage = (event) => {
     try {
       const msg = JSON.parse(event.data);
-      setLog(`${msg.type}: ${msg.payload?.reason || (msg.payload?.success ? "ok" : "")}`);
+      if (msg.type === "pair.result" && msg.payload?.reason) {
+        setStatus(`Pairing result: ${msg.payload.reason}`, "connected");
+      }
     } catch {
-      setLog("Received non-JSON response");
+      // ignore non-JSON server messages
     }
   };
-});
+}
 
-document.getElementById("pairBtn").addEventListener("click", () => {
-  send("pair.request", { device_name: "Phone Web UI", public_key: "web-ui" });
-  const code = pairCodeInput.value.trim();
-  if (/^\d{6}$/.test(code)) {
-    send("pair.confirm", { code, accepted: true });
-  } else {
-    setLog("Enter a valid 6-digit pairing code");
+reconnectBtn.addEventListener("click", () => {
+  if (ws) {
+    ws.close();
   }
+  connect();
 });
 
-document.querySelectorAll("[data-click]").forEach((button) => {
-  button.addEventListener("click", () => {
-    const btn = button.dataset.click;
-    send("input.mouse_click", { button: btn, action: "down" });
-    send("input.mouse_click", { button: btn, action: "up" });
-  });
-});
-
-document.getElementById("scrollUp").addEventListener("click", () => {
-  send("input.mouse_scroll", { delta_x: 0, delta_y: 100 });
-});
-
-document.getElementById("scrollDown").addEventListener("click", () => {
-  send("input.mouse_scroll", { delta_x: 0, delta_y: -100 });
-});
-
-document.getElementById("sendKey").addEventListener("click", () => {
-  const key = keyInput.value.trim();
-  if (!key) {
+pairBtn.addEventListener("click", () => {
+  const code = pairCodeInput.value.trim();
+  if (!/^\d{6}$/.test(code)) {
+    setStatus("Enter a valid 6-digit pairing code", "disconnected");
     return;
   }
-  send("input.keypress", { key, action: "down" });
-  send("input.keypress", { key, action: "up" });
+
+  send("pair.request", { device_name: "Phone Web UI", public_key: "web-ui" });
+  send("pair.confirm", { code, accepted: true });
+});
+
+keyboardInput.addEventListener("keydown", (event) => {
+  if (event.key.length === 1 || event.key === "Enter" || event.key === "Backspace" || event.key === "Tab") {
+    send("input.keypress", { key: event.key, action: "down" });
+    send("input.keypress", { key: event.key, action: "up" });
+  }
+});
+
+keyboardInput.addEventListener("input", (event) => {
+  const value = event.target.value;
+  const last = value.at(-1);
+  if (last) {
+    send("input.keypress", { key: last, action: "down" });
+    send("input.keypress", { key: last, action: "up" });
+  }
+
+  if (value.length > 32) {
+    event.target.value = "";
+  }
 });
 
 touchpad.addEventListener("touchstart", (event) => {
-  if (event.touches.length !== 1) {
+  if (event.touches.length === 1) {
+    const touch = event.touches[0];
+    lastSingleTouch = { x: touch.clientX, y: touch.clientY };
+    pendingTap = true;
+    lastTwoFingerCenter = null;
     return;
   }
-  const touch = event.touches[0];
-  lastTouch = { x: touch.clientX, y: touch.clientY };
+
+  if (event.touches.length === 2) {
+    const first = event.touches[0];
+    const second = event.touches[1];
+    lastTwoFingerCenter = {
+      x: (first.clientX + second.clientX) / 2,
+      y: (first.clientY + second.clientY) / 2,
+    };
+    lastSingleTouch = null;
+    pendingTap = false;
+  }
 });
 
 touchpad.addEventListener("touchmove", (event) => {
   event.preventDefault();
-  if (event.touches.length !== 1 || !lastTouch) {
+
+  if (event.touches.length === 1 && lastSingleTouch) {
+    const touch = event.touches[0];
+    const dx = touch.clientX - lastSingleTouch.x;
+    const dy = touch.clientY - lastSingleTouch.y;
+    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+      pendingTap = false;
+      send("input.mouse_move", { dx, dy });
+    }
+    lastSingleTouch = { x: touch.clientX, y: touch.clientY };
     return;
   }
 
-  const touch = event.touches[0];
-  const dx = touch.clientX - lastTouch.x;
-  const dy = touch.clientY - lastTouch.y;
-  lastTouch = { x: touch.clientX, y: touch.clientY };
-
-  send("input.mouse_move", { dx, dy });
+  if (event.touches.length === 2 && lastTwoFingerCenter) {
+    const first = event.touches[0];
+    const second = event.touches[1];
+    const centerY = (first.clientY + second.clientY) / 2;
+    const deltaY = centerY - lastTwoFingerCenter.y;
+    if (Math.abs(deltaY) > 1) {
+      send("input.mouse_scroll", { delta_x: 0, delta_y: -deltaY * 2 });
+    }
+    lastTwoFingerCenter = {
+      x: (first.clientX + second.clientX) / 2,
+      y: centerY,
+    };
+    pendingTap = false;
+  }
 });
 
 touchpad.addEventListener("touchend", () => {
-  lastTouch = null;
+  if (pendingTap) {
+    sendClick("left");
+  }
+  pendingTap = false;
+  lastSingleTouch = null;
+  lastTwoFingerCenter = null;
 });
+
+connect();
