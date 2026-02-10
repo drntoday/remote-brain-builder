@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 DEFAULT_PORT = 8765
-DEFAULT_WEB_UI_PORT = 8080
+DEFAULT_WEB_UI_PORT = 8766
 DEFAULT_RATE_LIMIT_PER_SEC = 30
 
 

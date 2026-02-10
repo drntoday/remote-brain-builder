@@ -78,12 +78,16 @@ class StaticUIHTTPServer:
                 )
                 return
 
-            if target in ("/", "/index.html"):
+            path = target.split("?", maxsplit=1)[0]
+            if path in ("/", "/index.html"):
                 file_path = self.static_dir / "index.html"
                 content_type = "text/html; charset=utf-8"
-            elif target == "/app.js":
+            elif path == "/app.js":
                 file_path = self.static_dir / "app.js"
                 content_type = "application/javascript; charset=utf-8"
+            elif path == "/styles.css":
+                file_path = self.static_dir / "styles.css"
+                content_type = "text/css; charset=utf-8"
             else:
                 await self._send_response(
                     writer,
