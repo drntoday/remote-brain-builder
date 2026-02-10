@@ -5,6 +5,8 @@ const keyboardInput = document.getElementById("keyboardInput");
 const reconnectBtn = document.getElementById("reconnectBtn");
 const touchpad = document.getElementById("touchpad");
 const controlsStatus = document.getElementById("controlsStatus");
+const cursorSpeedInput = document.getElementById("cursorSpeed");
+const cursorSpeedValue = document.getElementById("cursorSpeedValue");
 
 const wsUrl = `ws://${window.location.hostname}:8765`;
 
@@ -26,6 +28,29 @@ function uuidv4() {
 
 const deviceId = localStorage.getItem("device_id") || uuidv4();
 localStorage.setItem("device_id", deviceId);
+
+const CURSOR_SPEED_KEY = "cursor_speed";
+const DEFAULT_CURSOR_SPEED = 2.0;
+const MIN_CURSOR_SPEED = 0.5;
+const MAX_CURSOR_SPEED = 4.0;
+
+function readCursorSpeed() {
+  const stored = Number.parseFloat(localStorage.getItem(CURSOR_SPEED_KEY) || "");
+  if (!Number.isFinite(stored)) {
+    return DEFAULT_CURSOR_SPEED;
+  }
+  return Math.min(MAX_CURSOR_SPEED, Math.max(MIN_CURSOR_SPEED, stored));
+}
+
+let cursorSpeed = readCursorSpeed();
+
+function updateCursorSpeedUi(value) {
+  cursorSpeedInput.value = value.toFixed(1);
+  cursorSpeedValue.textContent = `${value.toFixed(1)}x`;
+}
+
+updateCursorSpeedUi(cursorSpeed);
+localStorage.setItem(CURSOR_SPEED_KEY, cursorSpeed.toFixed(1));
 
 let ws;
 let paired = false;
@@ -202,7 +227,7 @@ touchpad.addEventListener("touchmove", (event) => {
     const dy = touch.clientY - lastSingleTouch.y;
     if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
       pendingTap = false;
-      send("input.mouse_move", { dx, dy });
+      send("input.mouse_move", { dx: dx * cursorSpeed, dy: dy * cursorSpeed });
     }
     lastSingleTouch = { x: touch.clientX, y: touch.clientY };
     return;
@@ -235,6 +260,17 @@ touchpad.addEventListener("touchend", () => {
   pendingTap = false;
   lastSingleTouch = null;
   lastTwoFingerCenter = null;
+});
+
+cursorSpeedInput.addEventListener("input", (event) => {
+  const nextSpeed = Number.parseFloat(event.target.value);
+  if (!Number.isFinite(nextSpeed)) {
+    return;
+  }
+
+  cursorSpeed = Math.min(MAX_CURSOR_SPEED, Math.max(MIN_CURSOR_SPEED, nextSpeed));
+  updateCursorSpeedUi(cursorSpeed);
+  localStorage.setItem(CURSOR_SPEED_KEY, cursorSpeed.toFixed(1));
 });
 
 setPairedState(false);
