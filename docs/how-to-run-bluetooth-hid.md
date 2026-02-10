@@ -37,3 +37,14 @@
 - **No pointer movement on Windows**:
   - Confirm Windows still shows the phone as connected Bluetooth input device.
   - Retry by toggling Bluetooth off/on and reconnecting.
+
+## 5) Download APK from CI
+The repository includes a GitHub Actions workflow at `.github/workflows/android-apk.yml` that builds a debug APK for pull requests, pushes to `main`, and manual runs.
+
+1. Open the repository in GitHub.
+2. Go to **Actions → Android APK CI**.
+3. Open a successful run.
+4. In the **Artifacts** section, download **android-debug-apk**.
+5. Extract the ZIP and install the APK from `app/build/outputs/apk/debug/` on your Android test device.
+
+> Note: CI publishes a debug APK artifact for testing and does not commit APK binaries into the repository.
