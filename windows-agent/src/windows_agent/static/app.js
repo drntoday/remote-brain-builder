@@ -4,6 +4,7 @@ const pairBtn = document.getElementById("pairBtn");
 const keyboardInput = document.getElementById("keyboardInput");
 const reconnectBtn = document.getElementById("reconnectBtn");
 const touchpad = document.getElementById("touchpad");
+const controlsStatus = document.getElementById("controlsStatus");
 
 const wsUrl = `ws://${window.location.hostname}:8765`;
 
@@ -27,6 +28,7 @@ const deviceId = localStorage.getItem("device_id") || uuidv4();
 localStorage.setItem("device_id", deviceId);
 
 let ws;
+let paired = false;
 let lastSingleTouch = null;
 let lastTwoFingerCenter = null;
 let pendingTap = false;
@@ -40,6 +42,15 @@ function nonce() {
 function setStatus(text, className) {
   statusEl.textContent = text;
   statusEl.className = `status ${className}`;
+}
+
+function setPairedState(nextPaired) {
+  paired = nextPaired;
+  keyboardInput.disabled = !paired;
+  touchpad.classList.toggle("disabled", !paired);
+  controlsStatus.textContent = paired
+    ? "Controls enabled (paired)"
+    : "Controls locked until pairing succeeds";
 }
 
 function envelope(type, payload) {
@@ -58,6 +69,12 @@ function send(type, payload) {
   if (!ws || ws.readyState !== WebSocket.OPEN) {
     return;
   }
+
+  if ((type.startsWith("input.") || type.startsWith("system.")) && !paired) {
+    setStatus("Pair first to use controls", "disconnected");
+    return;
+  }
+
   ws.send(JSON.stringify(envelope(type, payload)));
 }
 
@@ -71,17 +88,29 @@ function connect() {
     return;
   }
 
+  setPairedState(false);
   setStatus(`Connecting to ${wsUrl}...`, "connecting");
   ws = new WebSocket(wsUrl);
 
   ws.onopen = () => setStatus(`Connected (${deviceId})`, "connected");
-  ws.onclose = () => setStatus("Disconnected", "disconnected");
+  ws.onclose = () => {
+    setPairedState(false);
+    setStatus("Disconnected", "disconnected");
+  };
   ws.onerror = () => setStatus("WebSocket error", "disconnected");
   ws.onmessage = (event) => {
     try {
       const msg = JSON.parse(event.data);
-      if (msg.type === "pair.result" && msg.payload?.reason) {
-        setStatus(`Pairing result: ${msg.payload.reason}`, "connected");
+      if (msg.type === "pair.result") {
+        if (msg.payload?.success) {
+          setPairedState(true);
+          setStatus("Pairing result: success", "connected");
+          return;
+        }
+
+        if (msg.payload?.reason) {
+          setStatus(`Pairing result: ${msg.payload.reason}`, "disconnected");
+        }
       }
     } catch {
       // ignore non-JSON server messages
@@ -108,6 +137,10 @@ pairBtn.addEventListener("click", () => {
 });
 
 keyboardInput.addEventListener("keydown", (event) => {
+  if (!paired) {
+    return;
+  }
+
   if (event.key.length === 1 || event.key === "Enter" || event.key === "Backspace" || event.key === "Tab") {
     send("input.keypress", { key: event.key, action: "down" });
     send("input.keypress", { key: event.key, action: "up" });
@@ -115,6 +148,10 @@ keyboardInput.addEventListener("keydown", (event) => {
 });
 
 keyboardInput.addEventListener("input", (event) => {
+  if (!paired) {
+    return;
+  }
+
   const value = event.target.value;
   const last = value.at(-1);
   if (last) {
@@ -128,6 +165,10 @@ keyboardInput.addEventListener("input", (event) => {
 });
 
 touchpad.addEventListener("touchstart", (event) => {
+  if (!paired) {
+    return;
+  }
+
   if (event.touches.length === 1) {
     const touch = event.touches[0];
     lastSingleTouch = { x: touch.clientX, y: touch.clientY };
@@ -149,6 +190,10 @@ touchpad.addEventListener("touchstart", (event) => {
 });
 
 touchpad.addEventListener("touchmove", (event) => {
+  if (!paired) {
+    return;
+  }
+
   event.preventDefault();
 
   if (event.touches.length === 1 && lastSingleTouch) {
@@ -180,6 +225,10 @@ touchpad.addEventListener("touchmove", (event) => {
 });
 
 touchpad.addEventListener("touchend", () => {
+  if (!paired) {
+    return;
+  }
+
   if (pendingTap) {
     sendClick("left");
   }
@@ -188,4 +237,5 @@ touchpad.addEventListener("touchend", () => {
   lastTwoFingerCenter = null;
 });
 
+setPairedState(false);
 connect();

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import secrets
 import uuid
 from datetime import datetime, timezone
@@ -23,6 +24,7 @@ INPUT_OR_SYSTEM_TYPES = {
     "input.keypress",
     "system.media",
 }
+PAIRING_CODE_PATTERN = re.compile(r"^\d{6}$")
 
 
 class WindowsAgentServer:
@@ -77,6 +79,9 @@ class WindowsAgentServer:
     def _is_trusted_for_action(self, msg: dict) -> bool:
         return self.registry.is_trusted(msg["device_id"])
 
+    def _requires_trusted_device(self, msg_type: str) -> bool:
+        return msg_type.startswith("input.") or msg_type.startswith("system.")
+
     async def _handle_pair_request(self, websocket: Any, msg: dict) -> None:
         payload = msg.get("payload", {})
         if not payload.get("device_name") or not payload.get("public_key"):
@@ -101,7 +106,7 @@ class WindowsAgentServer:
         accepted = bool(payload.get("accepted"))
         code = str(payload.get("code", ""))
 
-        if not accepted or code != self.pairing_code:
+        if not accepted or not PAIRING_CODE_PATTERN.fullmatch(code) or code != self.pairing_code:
             self._audit(device_id=device_id, action="pair_failed")
             await self._send(
                 websocket,
@@ -115,24 +120,43 @@ class WindowsAgentServer:
             )
             return
 
-        request_payload = self.pending_pair_requests.pop(device_id, {})
-        self.registry.trust_device(
-            device_id=device_id,
-            device_name=str(request_payload.get("device_name", "unknown")),
-            public_key=str(request_payload.get("public_key", "")),
-        )
-        self._audit(device_id=device_id, action="pair_success")
+        request_payload = self.pending_pair_requests.pop(device_id, None)
+        if request_payload is None:
+            self._audit(device_id=device_id, action="pair_failed_missing_request")
+            await self._send(
+                websocket,
+                msg_type="pair.result",
+                device_id="windows-host",
+                payload={
+                    "success": False,
+                    "session_token": None,
+                    "reason": "invalid_pair_request",
+                },
+            )
+            return
         await self._send(
             websocket,
             msg_type="pair.result",
             device_id="windows-host",
             payload={"success": True, "session_token": secrets.token_urlsafe(24), "reason": None},
         )
+        self.registry.trust_device(
+            device_id=device_id,
+            device_name=str(request_payload.get("device_name", "unknown")),
+            public_key=str(request_payload.get("public_key", "")),
+        )
+        self._audit(device_id=device_id, action="pair_success")
 
     async def _handle_action(self, websocket: Any, msg: dict) -> None:
         msg_type = msg["type"]
         device_id = msg["device_id"]
         if not self._is_trusted_for_action(msg):
+            self.logger.warning(
+                "reject_untrusted_input device_id=%s type=%s",
+                device_id,
+                msg_type,
+            )
+            self._audit(device_id=device_id, action=f"rejected_untrusted:{msg_type}")
             await self._send(
                 websocket,
                 msg_type="pair.result",
@@ -197,6 +221,25 @@ class WindowsAgentServer:
                 continue
 
             msg_type = msg["type"]
+            if self._requires_trusted_device(msg_type) and not self._is_trusted_for_action(msg):
+                self.logger.warning(
+                    "reject_untrusted_input device_id=%s type=%s",
+                    msg["device_id"],
+                    msg_type,
+                )
+                self._audit(device_id=msg["device_id"], action=f"rejected_untrusted:{msg_type}")
+                await self._send(
+                    websocket,
+                    msg_type="pair.result",
+                    device_id="windows-host",
+                    payload={
+                        "success": False,
+                        "session_token": None,
+                        "reason": "device_not_trusted",
+                    },
+                )
+                continue
+
             if msg_type == "pair.request":
                 await self._handle_pair_request(websocket, msg)
             elif msg_type == "pair.confirm":
