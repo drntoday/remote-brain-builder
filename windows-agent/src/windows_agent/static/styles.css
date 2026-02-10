@@ -83,3 +83,17 @@ button.secondary {
   touch-action: none;
   user-select: none;
 }
+
+.controls-status {
+  margin: 0 0 10px;
+  color: #cfcfcf;
+}
+
+#touchpad.disabled {
+  opacity: 0.45;
+}
+
+#keyboardInput:disabled,
+#touchpad.disabled {
+  cursor: not-allowed;
+}

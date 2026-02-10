@@ -73,3 +73,42 @@ def test_pairing_failure_wrong_code(tmp_path: Path) -> None:
     result = json.loads(ws.messages[-1])
     assert result["payload"]["success"] is False
     assert result["payload"]["reason"] == "invalid_code_or_rejected"
+
+
+def test_pairing_failure_wrong_code_does_not_trust_device(tmp_path: Path) -> None:
+    server = _server(tmp_path)
+    ws = DummyWebSocket()
+
+    req = BASE_MSG | {
+        "type": "pair.request",
+        "nonce": "nonce-5",
+        "payload": {"device_name": "Phone", "public_key": "abc"},
+    }
+    confirm = BASE_MSG | {
+        "type": "pair.confirm",
+        "nonce": "nonce-6",
+        "payload": {"code": "111111", "accepted": True},
+    }
+
+    asyncio.run(server._handle_pair_request(ws, req))
+    asyncio.run(server._handle_pair_confirm(ws, confirm))
+
+    assert server.registry.is_trusted("android-1") is False
+
+
+def test_pair_confirm_without_request_fails_and_does_not_trust(tmp_path: Path) -> None:
+    server = _server(tmp_path)
+    ws = DummyWebSocket()
+
+    confirm = BASE_MSG | {
+        "type": "pair.confirm",
+        "nonce": "nonce-7",
+        "payload": {"code": "123456", "accepted": True},
+    }
+
+    asyncio.run(server._handle_pair_confirm(ws, confirm))
+
+    result = json.loads(ws.messages[-1])
+    assert result["payload"]["success"] is False
+    assert result["payload"]["reason"] == "invalid_pair_request"
+    assert server.registry.is_trusted("android-1") is False

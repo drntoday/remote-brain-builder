@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 from pathlib import Path
 
 from windows_agent.config import AgentConfig
@@ -14,7 +15,12 @@ class DummyWebSocket:
         self.messages.append(message)
 
 
-def test_unpaired_device_rejected_for_input(tmp_path: Path) -> None:
+class RaisingInputController:
+    def mouse_move(self, *, dx: float, dy: float) -> None:
+        raise AssertionError("input handler must not execute for untrusted devices")
+
+
+def _server(tmp_path: Path) -> WindowsAgentServer:
     cfg = AgentConfig(
         host="127.0.0.1",
         port=8765,
@@ -22,7 +28,12 @@ def test_unpaired_device_rejected_for_input(tmp_path: Path) -> None:
         audit_log_path=tmp_path / "audit.log",
         show_pairing_window=False,
     )
-    server = WindowsAgentServer(config=cfg, pairing_code="123456")
+    return WindowsAgentServer(config=cfg, pairing_code="123456")
+
+
+def test_unpaired_device_rejected_for_input(tmp_path: Path, caplog) -> None:
+    server = _server(tmp_path)
+    server.input_controller = RaisingInputController()
     ws = DummyWebSocket()
 
     msg = {
@@ -35,8 +46,11 @@ def test_unpaired_device_rejected_for_input(tmp_path: Path) -> None:
         "payload": {"dx": 2, "dy": 3},
     }
 
-    asyncio.run(server._handle_action(ws, msg))
+    with caplog.at_level(logging.INFO, logger="windows_agent"):
+        asyncio.run(server._handle_action(ws, msg))
 
     result = json.loads(ws.messages[-1])
     assert result["payload"]["success"] is False
     assert result["payload"]["reason"] == "device_not_trusted"
+    assert "reject_untrusted_input device_id=unknown-device type=input.mouse_move" in caplog.text
+    assert "action=rejected_untrusted:input.mouse_move" in caplog.text
