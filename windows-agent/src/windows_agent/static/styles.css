@@ -97,3 +97,13 @@ button.secondary {
 #touchpad.disabled {
   cursor: not-allowed;
 }
+
+
+label[for="cursorSpeed"] {
+  display: block;
+  margin-bottom: 6px;
+}
+
+#cursorSpeed {
+  margin-bottom: 10px;
+}
