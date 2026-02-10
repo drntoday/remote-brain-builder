@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import secrets
+from pathlib import Path
 
 from .config import parse_args
 from .pairing_ui import PairingCodeWindow
 from .server import WindowsAgentServer
+from .web_ui_server import StaticUIHTTPServer, run_services
 
 
 def main() -> None:
@@ -20,7 +22,15 @@ def main() -> None:
             print(f"Unable to open pairing window: {exc}")
 
     server = WindowsAgentServer(config=config, pairing_code=code)
-    asyncio.run(server.run())
+    if config.web_ui_enabled:
+        ui_server = StaticUIHTTPServer(
+            host=config.web_ui_host,
+            port=config.web_ui_port,
+            static_dir=Path(__file__).parent / "static",
+        )
+        asyncio.run(run_services(server.run, ui_server.run))
+    else:
+        asyncio.run(server.run())
 
 
 if __name__ == "__main__":

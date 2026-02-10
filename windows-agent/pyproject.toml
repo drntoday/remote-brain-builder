@@ -33,3 +33,6 @@ ignore = ["UP017"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+[tool.setuptools.package-data]
+windows_agent = ["static/*.html", "static/*.js"]
