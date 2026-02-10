@@ -1,0 +1,188 @@
+{
+  "protocol_version": "1.0",
+  "envelope": {
+    "description": "All protocol messages MUST be wrapped in this envelope.",
+    "fields": {
+      "type": {
+        "type": "string",
+        "description": "Message type identifier (for example, pair.request or input.keypress)."
+      },
+      "id": {
+        "type": "string",
+        "description": "Unique message identifier (UUID or equivalent)."
+      },
+      "ts": {
+        "type": "number",
+        "description": "Unix epoch timestamp in milliseconds."
+      },
+      "nonce": {
+        "type": "string",
+        "description": "Single-use random value to prevent replay."
+      },
+      "device_id": {
+        "type": "string",
+        "description": "Stable identifier for the sending device."
+      }
+    }
+  },
+  "message_specs": {
+    "pair.request": {
+      "payload": {
+        "device_name": "string",
+        "public_key": "string"
+      },
+      "example": {
+        "type": "pair.request",
+        "id": "b7e4d303-f4af-4ce7-8e8b-c5e44f417000",
+        "ts": 1735689600000,
+        "nonce": "f2f3c49ccf8f4aa8a8f1",
+        "device_id": "android-6f14b9",
+        "payload": {
+          "device_name": "Pixel 8",
+          "public_key": "base64-encoded-client-public-key"
+        }
+      }
+    },
+    "pair.challenge": {
+      "payload": {
+        "code": "string (6-digit numeric)",
+        "expires_in_ms": "number"
+      },
+      "example": {
+        "type": "pair.challenge",
+        "id": "5a43d8c2-bbc2-4e2c-91fc-f4f7ecb2f111",
+        "ts": 1735689600100,
+        "nonce": "6e95f17a9c2843d4a1c2",
+        "device_id": "windows-host-01",
+        "payload": {
+          "code": "804213",
+          "expires_in_ms": 60000
+        }
+      }
+    },
+    "pair.confirm": {
+      "payload": {
+        "code": "string (6-digit numeric)",
+        "accepted": "boolean"
+      },
+      "example": {
+        "type": "pair.confirm",
+        "id": "8bb70f4b-4359-4b66-b8da-cc17d8b7c222",
+        "ts": 1735689600400,
+        "nonce": "5db8f2898de040f7bf72",
+        "device_id": "android-6f14b9",
+        "payload": {
+          "code": "804213",
+          "accepted": true
+        }
+      }
+    },
+    "pair.result": {
+      "payload": {
+        "success": "boolean",
+        "session_token": "string | null",
+        "reason": "string | null"
+      },
+      "example": {
+        "type": "pair.result",
+        "id": "9e4d8f56-cf07-4f34-95a1-5f6029cf7333",
+        "ts": 1735689600700,
+        "nonce": "f9a6dbc5119f4f35ad47",
+        "device_id": "windows-host-01",
+        "payload": {
+          "success": true,
+          "session_token": "pair-session-token-example",
+          "reason": null
+        }
+      }
+    },
+    "input.mouse_move": {
+      "payload": {
+        "dx": "number",
+        "dy": "number"
+      },
+      "example": {
+        "type": "input.mouse_move",
+        "id": "f0a30d8a-a7e5-40c8-8f68-c2b0d4d2a444",
+        "ts": 1735689601000,
+        "nonce": "3cd4b7d4cb214f6da1f3",
+        "device_id": "android-6f14b9",
+        "payload": {
+          "dx": 12,
+          "dy": -4
+        }
+      }
+    },
+    "input.mouse_click": {
+      "payload": {
+        "button": "left | right | middle",
+        "action": "down | up"
+      },
+      "example": {
+        "type": "input.mouse_click",
+        "id": "a9d2a5c4-2b2f-497b-9102-7bb5c1519555",
+        "ts": 1735689601100,
+        "nonce": "3de8d264f74b49cf89e9",
+        "device_id": "android-6f14b9",
+        "payload": {
+          "button": "left",
+          "action": "down"
+        }
+      }
+    },
+    "input.mouse_scroll": {
+      "payload": {
+        "delta_x": "number",
+        "delta_y": "number"
+      },
+      "example": {
+        "type": "input.mouse_scroll",
+        "id": "94e5d582-865e-4048-bbb9-e46d05257666",
+        "ts": 1735689601200,
+        "nonce": "f32176d3f6994f04b4c9",
+        "device_id": "android-6f14b9",
+        "payload": {
+          "delta_x": 0,
+          "delta_y": -120
+        }
+      }
+    },
+    "input.keypress": {
+      "payload": {
+        "key": "string",
+        "action": "down | up"
+      },
+      "example": {
+        "type": "input.keypress",
+        "id": "8d0938ec-7144-4779-a13f-b0d0ff7c8777",
+        "ts": 1735689601300,
+        "nonce": "f8f7dc86a9e54f2d9e9d",
+        "device_id": "android-6f14b9",
+        "payload": {
+          "key": "Enter",
+          "action": "up"
+        }
+      }
+    },
+    "system.media": {
+      "payload": {
+        "command": "play_pause | next | prev | vol_up | vol_down | mute"
+      },
+      "example": {
+        "type": "system.media",
+        "id": "16bd9311-1453-495a-bf05-af94d34b5888",
+        "ts": 1735689601400,
+        "nonce": "b8f02b5f8a6a4dd1adac",
+        "device_id": "android-6f14b9",
+        "payload": {
+          "command": "play_pause"
+        }
+      }
+    }
+  },
+  "security_notes": [
+    "Pairing is required before accepting any control or system command messages.",
+    "Receivers MUST validate nonce uniqueness per device/session to mitigate replay attacks.",
+    "Only explicitly allowlisted commands and actions are permitted; reject unknown message types or payload values."
+  ]
+}
